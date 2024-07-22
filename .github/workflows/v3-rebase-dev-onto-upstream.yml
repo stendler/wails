@@ -1,0 +1,192 @@
+name: Rebase v3/dev fork onto upstream v3-alpha
+
+on:
+  schedule:
+    - cron:  '0 7 * * 1,4'
+    # scheduled at 07:00 every Monday and Thursday
+  workflow_dispatch:  # click the button on Github repo!
+
+jobs:
+  test_go:
+    name: Run Go Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, macos-latest, ubuntu-latest ]
+        go-version: [ 1.22 ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20  # greater than the number of commits you made
+
+      - name: Rebase onto upstream changes (to test)
+        run: |
+          git config set user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config set user.name 'GitHub Actions'
+          git remote add upstream https://github.com/wailsapp/wails
+          git fetch --depth=100 upstream v3-alpha
+          git rebase upstream/v3-alpha
+
+      - name: Install linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update -y && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev javascriptcoregtk-4.1-dev build-essential pkg-config
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Examples
+        working-directory: ./v3
+        run: task test:examples
+
+      - name: Run tests (mac)
+        if: matrix.os == 'macos-latest'
+        env:
+          CGO_LDFLAGS: -framework UniformTypeIdentifiers -mmacosx-version-min=10.13
+        working-directory: ./v3
+        run: go test -v ./...
+
+      - name: Run tests (!mac)
+        if: matrix.os != 'macos-latest'
+        working-directory: ./v3
+        run: go test -v ./...
+
+  test_js:
+    name: Run JS Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [ 20.x ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20  # greater than the number of commits you made
+
+      - name: Rebase onto upstream changes (to test)
+        run: |
+          git config set user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config set user.name 'GitHub Actions'
+          git remote add upstream https://github.com/wailsapp/wails
+          git fetch --depth=100 upstream v3-alpha
+          git rebase upstream/v3-alpha
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: v2/internal/frontend/runtime
+
+      - name: Run tests
+        run: npm test
+        working-directory: v2/internal/frontend/runtime
+
+  test_templates:
+    name: Test Templates
+    needs: test_go
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        template:
+          [
+            svelte,
+            svelte-ts,
+            vue,
+            vue-ts,
+            react,
+            react-ts,
+            preact,
+            preact-ts,
+            lit,
+            lit-ts,
+            vanilla,
+            vanilla-ts,
+          ]
+        go-version: [ 1.22 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20  # greater than the number of commits you made
+
+      - name: Rebase onto upstream changes (to test)
+        run: |
+          git config set user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config set user.name 'GitHub Actions'
+          git remote add upstream https://github.com/wailsapp/wails
+          git fetch --depth=100 upstream v3-alpha
+          git rebase upstream/v3-alpha
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Setup Golang caches
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-golang-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-golang-
+
+      - name: Install linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update -y && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev javascriptcoregtk-4.1-dev build-essential pkg-config
+
+      - name: Build Wails3 CLI
+        run: |
+          cd ./v3/cmd/wails3
+          go install
+          wails3 -help
+
+      - name: Generate template '${{ matrix.template }}'
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest 
+          mkdir -p ./test-${{ matrix.template }}
+          cd ./test-${{ matrix.template }}
+          wails3 init -n ${{ matrix.template }} -t ${{ matrix.template }}
+          cd ${{ matrix.template }}
+          wails3 build
+  
+
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    name: Sync latest commits from upstream repo
+    needs:
+      - test_go
+      - test_js
+      - test_templates
+
+    steps:
+      # Step 1: run a standard checkout action, provided by github
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20  # greater than the number of commits you made
+
+      # Step 2: run the sync action
+      - name: Rebase onto upstream changes
+        id: sync
+        uses: imba-tjd/rebase-upstream-action@0.5
+        with:
+          branch: v3-alpha
+          upstream: wailsapp/wails

@@ -1,3 +1,7 @@
+> [!WARNING]
+> This is a forked development branch of the v3 alpha for yet unmerged changes.
+> Go to https://github.com/wailsapp/wails for the upstream repo.
+
 <p align="center" style="text-align: center">
   <img src="./assets/images/logo-universal.png" width="55%"><br/>
 </p>

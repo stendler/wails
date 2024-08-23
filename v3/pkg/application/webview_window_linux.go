@@ -233,44 +233,45 @@ func (w *linuxWebviewWindow) run() {
 		w.gtkmenu = (menu.impl).(*linuxMenu).native
 	}
 
-	w.window, w.webview, w.vbox = windowNew(app.application, w.gtkmenu, w.parent.id, w.parent.options.Linux.WebviewGpuPolicy)
+	windowOptions := w.parent.options
+	w.window, w.webview, w.vbox = windowNew(app.application, w.gtkmenu, w.parent.id, windowOptions.Linux.WebviewGpuPolicy)
 	app.registerWindow(w.window, w.parent.id) // record our mapping
 	w.connectSignals()
-	if w.parent.options.EnableDragAndDrop {
+	if windowOptions.EnableDragAndDrop {
 		w.enableDND()
 	}
-	w.setTitle(w.parent.options.Title)
+	w.setTitle(windowOptions.Title)
 	w.setIcon(app.icon)
-	w.setAlwaysOnTop(w.parent.options.AlwaysOnTop)
-	w.setResizable(!w.parent.options.DisableResize)
+	w.setAlwaysOnTop(windowOptions.AlwaysOnTop)
+	w.setResizable(!windowOptions.DisableResize)
 	// only set min/max size if actually set
-	if w.parent.options.MinWidth != 0 &&
-		w.parent.options.MinHeight != 0 &&
-		w.parent.options.MaxWidth != 0 &&
-		w.parent.options.MaxHeight != 0 {
+	if windowOptions.MinWidth != 0 &&
+		windowOptions.MinHeight != 0 &&
+		windowOptions.MaxWidth != 0 &&
+		windowOptions.MaxHeight != 0 {
 		w.setMinMaxSize(
-			w.parent.options.MinWidth,
-			w.parent.options.MinHeight,
-			w.parent.options.MaxWidth,
-			w.parent.options.MaxHeight,
+			windowOptions.MinWidth,
+			windowOptions.MinHeight,
+			windowOptions.MaxWidth,
+			windowOptions.MaxHeight,
 		)
 	}
-	w.setDefaultSize(w.parent.options.Width, w.parent.options.Height)
-	w.setSize(w.parent.options.Width, w.parent.options.Height)
-	w.setZoom(w.parent.options.Zoom)
-	if w.parent.options.BackgroundType != BackgroundTypeSolid {
+	w.setDefaultSize(windowOptions.Width, windowOptions.Height)
+	w.setSize(windowOptions.Width, windowOptions.Height)
+	w.setZoom(windowOptions.Zoom)
+	if windowOptions.BackgroundType != BackgroundTypeSolid {
 		w.setTransparent()
-		w.setBackgroundColour(w.parent.options.BackgroundColour)
+		w.setBackgroundColour(windowOptions.BackgroundColour)
 	}
 
-	w.setFrameless(w.parent.options.Frameless)
+	w.setFrameless(windowOptions.Frameless)
 
-	if w.parent.options.X != 0 || w.parent.options.Y != 0 {
-		w.setRelativePosition(w.parent.options.X, w.parent.options.Y)
+	if windowOptions.X != 0 || windowOptions.Y != 0 {
+		w.setRelativePosition(windowOptions.X, windowOptions.Y)
 	} else {
 		w.center()
 	}
-	switch w.parent.options.StartState {
+	switch windowOptions.StartState {
 	case WindowStateMaximised:
 		w.maximise()
 	case WindowStateMinimised:
@@ -281,20 +282,20 @@ func (w *linuxWebviewWindow) run() {
 	}
 
 	// Ignore mouse events if requested
-	w.setIgnoreMouseEvents(w.parent.options.IgnoreMouseEvents)
+	w.setIgnoreMouseEvents(windowOptions.IgnoreMouseEvents)
 
-	startURL, err := assetserver.GetStartURL(w.parent.options.URL)
+	startURL, err := assetserver.GetStartURL(windowOptions.URL)
 	if err != nil {
 		globalApplication.fatal(err.Error())
 	}
 
 	w.setURL(startURL)
 	w.parent.OnWindowEvent(events.Linux.WindowLoadChanged, func(_ *WindowEvent) {
-		if w.parent.options.JS != "" {
-			w.execJS(w.parent.options.JS)
+		if windowOptions.JS != "" {
+			w.execJS(windowOptions.JS)
 		}
-		if w.parent.options.CSS != "" {
-			js := fmt.Sprintf("(function() { var style = document.createElement('style'); style.appendChild(document.createTextNode('%s')); document.head.appendChild(style); })();", w.parent.options.CSS)
+		if windowOptions.CSS != "" {
+			js := fmt.Sprintf("(function() { var style = document.createElement('style'); style.appendChild(document.createTextNode('%s')); document.head.appendChild(style); })();", windowOptions.CSS)
 			w.execJS(js)
 		}
 	})
@@ -317,20 +318,20 @@ func (w *linuxWebviewWindow) run() {
 	w.parent.RegisterHook(events.Linux.WindowLoadChanged, func(e *WindowEvent) {
 		w.execJS(runtime.Core())
 	})
-	if w.parent.options.HTML != "" {
-		w.setHTML(w.parent.options.HTML)
+	if windowOptions.HTML != "" {
+		w.setHTML(windowOptions.HTML)
 	}
-	if !w.parent.options.Hidden {
+	if !windowOptions.Hidden {
 		w.show()
-		if w.parent.options.X != 0 || w.parent.options.Y != 0 {
-			w.setRelativePosition(w.parent.options.X, w.parent.options.Y)
+		if windowOptions.X != 0 || windowOptions.Y != 0 {
+			w.setRelativePosition(windowOptions.X, windowOptions.Y)
 		} else {
 			w.center() // needs to be queued until after GTK starts up!
 		}
 	}
-	if w.parent.options.DevToolsEnabled || globalApplication.isDebugMode {
+	if windowOptions.DevToolsEnabled || globalApplication.isDebugMode {
 		w.enableDevTools()
-		if w.parent.options.OpenInspectorOnStartup {
+		if windowOptions.OpenInspectorOnStartup {
 			w.openDevTools()
 		}
 	}

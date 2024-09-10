@@ -1,0 +1,30 @@
+name: Sync upstream v3-alpha to check tests
+
+on:
+  schedule:
+    - cron:  '0 7 * * 1,4'
+    # scheduled at 07:00 every Monday and Thursday
+  workflow_dispatch:  # click the button on Github repo!
+
+jobs:
+
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    name: Sync latest commits from upstream repo
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20  # greater than the number of commits you made
+          ref: v3-alpha
+
+      - name: Setup git and upstream remote
+        run: |
+          git config set user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config set user.name 'GitHub Actions'
+          git remote add upstream https://github.com/wailsapp/wails
+          git fetch --depth=100 upstream v3-alpha
+
+      - run: git merge --ff-only upstream/v3-alpha
+      - run: git push

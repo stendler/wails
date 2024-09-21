@@ -68,6 +68,8 @@ static guint get_window_id(void *object)
 
 // exported below
 void activateLinux(gpointer data);
+void windowDoIgnoreMouseEvents(gpointer data);
+void windowNotIgnoreMouseEvents(gpointer data);
 extern void emit(WindowEvent* data);
 extern gboolean handleConfigureEvent(GtkWidget*, GdkEventConfigure*, uintptr_t);
 extern gboolean handleDeleteEvent(GtkWidget*, GdkEvent*, uintptr_t);
@@ -1054,14 +1056,47 @@ func (w *linuxWebviewWindow) show() {
 	//w.setPosition(w.lastX, w.lastY)
 }
 
-func windowIgnoreMouseEvents(window pointer, webview pointer, ignore bool) {
+//export windowDoIgnoreMouseEvents
+func windowDoIgnoreMouseEvents(data pointer) {
+	gtkWidget := (*C.GtkWidget)(data)
+	gdkWindow := C.gtk_widget_get_window(gtkWidget)
+	C.gdk_window_set_pass_through(gdkWindow, 1) // FIXME somehow does not behave as expected with either value
+
+	globalApplication.debug("do ignore", C.gdk_window_get_pass_through(gdkWindow))
+}
+
+//export windowNotIgnoreMouseEvents
+func windowNotIgnoreMouseEvents(data pointer) {
+	gtkWidget := (*C.GtkWidget)(data)
+	gdkWindow := C.gtk_widget_get_window(gtkWidget)
+	C.gdk_window_set_pass_through(gdkWindow, 0)
+	globalApplication.debug("not ignore", C.gdk_window_get_pass_through(gdkWindow))
+
+}
+
+func (w *linuxWebviewWindow) windowIgnoreMouseEvents(ignore bool) {
 	var enable C.int
+	var realized C.gboolean
 	if ignore {
 		enable = 1
 	}
-	gdkWindow := (*C.GdkWindow)(window)
-	C.gdk_window_set_pass_through(gdkWindow, enable)
-	C.webkit_web_view_set_editable((*C.WebKitWebView)(webview), C.gboolean(enable))
+
+	realized = C.gtk_widget_get_realized(w.gtkWidget())
+	if realized != 0 { // all non-zero values are true https://docs.gtk.org/glib/types.html#gboolean
+		globalApplication.debug("realized!")
+		gdkWindow := C.gtk_widget_get_window(w.gtkWidget())
+		C.gdk_window_set_pass_through(gdkWindow, enable)
+	} else {
+		globalApplication.debug("not realized!")
+		signal := C.CString("realize")
+		defer C.free(unsafe.Pointer(signal))
+		if ignore {
+			C.signal_connect(unsafe.Pointer(w.gtkWidget()), signal, C.windowDoIgnoreMouseEvents, unsafe.Pointer(w.gtkWidget()))
+		} else {
+			C.signal_connect(unsafe.Pointer(w.gtkWidget()), signal, C.windowNotIgnoreMouseEvents, unsafe.Pointer(w.gtkWidget()))
+		}
+	}
+	C.webkit_web_view_set_editable(w.webKitWebView(), C.gboolean(enable))
 }
 
 func (w *linuxWebviewWindow) webKitWebView() *C.WebKitWebView {
